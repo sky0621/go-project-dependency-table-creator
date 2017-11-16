@@ -1,0 +1,6 @@
+package: github.com/sky0621/proj03
+import:
+- package: github.com/line/line-bot-sdk-go
+  subpackages:
+  - linebot
+- package: github.com/uber-go/zap

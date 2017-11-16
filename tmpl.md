@@ -6,9 +6,9 @@
 
 ##### ・Goのプロジェクトであること
 
-##### ・プロジェクトディレクトリ直下に glide.yaml を配置していること
+##### ・glideでパッケージ管理している（＝glide.yamlを配置している）こと
 
-{{range .Headers}}| {{.}} {{end}} |
+{{range .Headers}}| {{.}} {{end}}|
 {{range .Headers}}| :--- {{end}} |
-{{range .Bodies}}{{range .}} | {{.}}{{end}} |
+{{range .Bodies}}{{range .}}| {{.}} {{end}}|
 {{end}}

@@ -1,0 +1,9 @@
+package: github.com/sky0621/proj01
+import:
+- package: github.com/spf13/viper
+- package: github.com/sky0621/proj02
+testImport:
+- package: github.com/stretchr/testify
+  version: ~1.1.4
+  subpackages:
+  - assert

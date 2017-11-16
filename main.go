@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"io/ioutil"
-
 	"strings"
 
 	"bufio"
+
+	"regexp"
 
 	"fmt"
 
@@ -20,89 +20,13 @@ import (
 )
 
 var dirNames []string
+var domain = flag.String("d", "github.com", "Search Domain")
 
-func main() {
-	target := flag.String("t", "/tmp/", "Parse Target")
-	domain := flag.String("d", "localhost", "Search Domain")
-	flag.Parse()
+var summaries []*Summary
 
-	logger, err := zap.NewProduction()
-	if err != nil {
-		panic(err)
-	}
-	defer logger.Sync()
-
-	dirs, err := ioutil.ReadDir(*target)
-	if err != nil {
-		logger.Error("Failed to read directory",
-			zap.String("filepath", *target))
-	}
-
-	// ひとまずプロジェクト名を収集
-	for _, dir := range dirs {
-		if strings.HasPrefix(dir.Name(), ".") {
-			continue
-		}
-		dirNames = append(dirNames, dir.Name())
-	}
-	//fmt.Println(dirNames)
-
-	result.Headers = append(result.Headers, "ProjectName")
-
-	for _, d := range dirNames {
-		result.Headers = append(result.Headers, d)
-	}
-
-	// 次に各プロジェクトのglide.yamlから依存プロジェクトを探索
-	for _, dir := range dirs {
-		if strings.HasPrefix(dir.Name(), ".") {
-			continue
-		}
-
-		gyamlName := filepath.Join(*target, dir.Name(), "glide.yaml")
-		//fmt.Println(gyamlName)
-		fp, err := os.Open(gyamlName)
-		defer fp.Close()
-		if err != nil {
-			//logger.Warn("Failed to open glide.yaml",
-			//	zap.String("filepath", *target),
-			//	zap.String("glide.yaml.name", gyamlName))
-			continue
-		}
-
-		oneRec := make([]string, len(result.Headers))
-		oneRec[0] = dir.Name()
-
-		//fmt.Println(gyamlName)
-		scanner := bufio.NewScanner(fp)
-		for scanner.Scan() {
-			txt := scanner.Text()
-			if strings.HasPrefix(txt, "- package: ") && strings.Contains(txt, *domain) {
-				//fmt.Println(txt)
-				txtParts := strings.Split(txt, "/")
-				pname := txtParts[len(txtParts)-1]
-				//fmt.Println(pname)
-				for i, pn := range dirNames {
-					if pn == pname {
-						oneRec[i+1] = "o"
-					} else {
-						oneRec[i+1] = "x"
-					}
-				}
-			}
-		}
-
-		result.Bodies = append(result.Bodies, oneRec)
-	}
-
-	tmpl := template.Must(template.ParseFiles("tmpl.md"))
-	buf := &bytes.Buffer{}
-	err = tmpl.Execute(buf, result)
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println(buf.String())
+type Summary struct {
+	baseProject string
+	useProjects []string
 }
 
 type Result struct {
@@ -116,4 +40,127 @@ var result = &Result{
 	Datetime: time.Now().Format("2006-01-02 15:04"),
 	Headers:  []string{},
 	Bodies:   [][]string{},
+}
+
+func main() {
+	target := flag.String("t", "/tmp/", "Parse Target")
+	flag.Parse()
+
+	logger, err := zap.NewProduction()
+	if err != nil {
+		panic(err)
+	}
+	defer logger.Sync()
+
+	err = filepath.Walk(*target, Apply)
+	if err != nil {
+		logger.Error("Failed to walk", zap.String("error", err.Error()))
+	}
+
+	// summary = baseProject + useProjects
+	for _, s := range summaries {
+		result.Headers = append(result.Headers, s.baseProject)
+	}
+
+	for _, s := range summaries {
+		body := []string{s.baseProject}
+		for _, h := range result.Headers {
+			var isHit bool = false
+			for _, u := range s.useProjects {
+				if h == u {
+					isHit = true
+				}
+			}
+			if isHit {
+				body = append(body, "o")
+			} else {
+				body = append(body, "-")
+			}
+		}
+		result.Bodies = append(result.Bodies, body)
+	}
+
+	result.Headers = append([]string{"Projects"}, result.Headers...)
+
+	tmpl := template.Must(template.ParseFiles("tmpl.md"))
+	buf := &bytes.Buffer{}
+	err = tmpl.Execute(buf, result)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(buf.String())
+}
+
+func Apply(path string, info os.FileInfo, err error) error {
+	if err != nil {
+		return err
+	}
+
+	if !filter(path, info) {
+		return nil
+	}
+
+	fp, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if fp != nil {
+			fp.Close()
+		}
+	}()
+
+	s := &Summary{}
+	useProjects := []string{}
+
+	// scan glide.yaml
+	scanner := bufio.NewScanner(fp)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		if strings.HasPrefix(line, "package: ") {
+			s.baseProject = strings.Replace(line, "package: ", "", -1)
+		}
+
+		if strings.HasPrefix(line, "- package: ") {
+			if strings.Contains(line, *domain) {
+				useProjects = append(useProjects, strings.Replace(line, "- package: ", "", -1))
+			}
+		}
+	}
+
+	s.useProjects = useProjects
+	summaries = append(summaries, s)
+
+	return nil
+}
+
+func filter(path string, info os.FileInfo) bool {
+	if info.IsDir() {
+		return false
+	}
+
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+
+	outDirExp, err := regexp.Compile("vendor")
+	if err != nil {
+		return false
+	}
+	if outDirExp.MatchString(absPath) {
+		return false
+	}
+
+	inFileExp, err := regexp.Compile("glide.yaml")
+	if err != nil {
+		return false
+	}
+	if !inFileExp.MatchString(path) {
+		return false
+	}
+
+	return true
 }
