@@ -16,8 +16,6 @@ import (
 
 	"fmt"
 
-	"strconv"
-
 	"go.uber.org/zap"
 )
 
@@ -34,19 +32,27 @@ type Summary struct {
 type Header struct {
 	Display string
 	URL     string
+	origin  string
+}
+
+type Body struct {
+	No          int
+	Display     string
+	URL         string
+	UseProjects []string
 }
 
 type Result struct {
 	//Branch   string
 	Datetime string
 	Headers  []Header
-	Bodies   [][]string
+	Bodies   []Body
 }
 
 var result = &Result{
 	Datetime: time.Now().Format("2006-01-02 15:04"),
 	Headers:  []Header{},
-	Bodies:   [][]string{},
+	Bodies:   []Body{},
 }
 
 func main() {
@@ -70,35 +76,37 @@ func main() {
 		seps := strings.Split(s.baseProject, "/")
 		result.Headers = append(
 			result.Headers,
-			Header{Display: seps[len(seps)-1], URL: s.baseProject},
+			Header{
+				Display: seps[len(seps)-1],
+				URL:     fmt.Sprintf("https://%v", s.baseProject),
+				origin:  s.baseProject,
+			},
 		)
 	}
 
 	for idx, s := range summaries {
 		seps := strings.Split(s.baseProject, "/")
-		body := []string{strconv.Itoa(idx + 1), seps[len(seps)-1]}
+		useProjects := []string{}
 		for _, h := range result.Headers {
 			var isHit bool = false
 			for _, u := range s.useProjects {
-				if h.URL == u {
+				if h.origin == u {
 					isHit = true
 				}
 			}
 			if isHit {
-				body = append(body, "o")
+				useProjects = append(useProjects, "o")
 			} else {
-				body = append(body, "-")
+				useProjects = append(useProjects, "-")
 			}
 		}
-		result.Bodies = append(result.Bodies, body)
+		result.Bodies = append(result.Bodies, Body{
+			No:          idx + 1,
+			Display:     seps[len(seps)-1],
+			URL:         fmt.Sprintf("https://%v", s.baseProject),
+			UseProjects: useProjects,
+		})
 	}
-
-	result.Headers = append(
-		[]Header{
-			Header{Display: "No"},
-			Header{Display: "Projects"},
-		},
-		result.Headers...)
 
 	tmpl := template.Must(template.ParseFiles("tmpl.md"))
 	buf := &bytes.Buffer{}

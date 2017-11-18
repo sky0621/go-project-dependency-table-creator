@@ -2,7 +2,7 @@
 
 #### ※ツール（ https://github.com/sky0621/go-project-dependency-table-creator ）による自動生成
 
-{{range .Headers}}| [{{.Display}}]({{.URL}}) {{end}}|
-{{range .Headers}}| :--- {{end}} |
-{{range .Bodies}}{{range .}}| {{.}} {{end}}|
+| No | Projects {{range .Headers}}| [{{.Display}}]({{.URL}}) {{end}}|
+| :--- | :--- {{range .Headers}}| :--- {{end}} |
+{{range .Bodies}}| {{.No}} | [{{.Display}}]({{.URL}}) {{range .UseProjects}}| {{.}} {{end}}|
 {{end}}
