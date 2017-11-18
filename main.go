@@ -16,6 +16,8 @@ import (
 
 	"fmt"
 
+	"strconv"
+
 	"go.uber.org/zap"
 )
 
@@ -43,7 +45,7 @@ var result = &Result{
 }
 
 func main() {
-	target := flag.String("t", "/tmp/", "Parse Target")
+	target := flag.String("t", "./samples", "Parse Target")
 	flag.Parse()
 
 	logger, err := zap.NewProduction()
@@ -62,8 +64,8 @@ func main() {
 		result.Headers = append(result.Headers, s.baseProject)
 	}
 
-	for _, s := range summaries {
-		body := []string{s.baseProject}
+	for idx, s := range summaries {
+		body := []string{strconv.Itoa(idx + 1), s.baseProject}
 		for _, h := range result.Headers {
 			var isHit bool = false
 			for _, u := range s.useProjects {
@@ -80,7 +82,7 @@ func main() {
 		result.Bodies = append(result.Bodies, body)
 	}
 
-	result.Headers = append([]string{"Projects"}, result.Headers...)
+	result.Headers = append([]string{"No", "Projects"}, result.Headers...)
 
 	tmpl := template.Must(template.ParseFiles("tmpl.md"))
 	buf := &bytes.Buffer{}
