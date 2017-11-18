@@ -31,16 +31,21 @@ type Summary struct {
 	useProjects []string
 }
 
+type Header struct {
+	Display string
+	URL     string
+}
+
 type Result struct {
 	//Branch   string
 	Datetime string
-	Headers  []string
+	Headers  []Header
 	Bodies   [][]string
 }
 
 var result = &Result{
 	Datetime: time.Now().Format("2006-01-02 15:04"),
-	Headers:  []string{},
+	Headers:  []Header{},
 	Bodies:   [][]string{},
 }
 
@@ -57,19 +62,25 @@ func main() {
 	err = filepath.Walk(*target, Apply)
 	if err != nil {
 		logger.Error("Failed to walk", zap.String("error", err.Error()))
+		os.Exit(-1)
 	}
 
 	// summary = baseProject + useProjects
 	for _, s := range summaries {
-		result.Headers = append(result.Headers, s.baseProject)
+		seps := strings.Split(s.baseProject, "/")
+		result.Headers = append(
+			result.Headers,
+			Header{Display: seps[len(seps)-1], URL: s.baseProject},
+		)
 	}
 
 	for idx, s := range summaries {
-		body := []string{strconv.Itoa(idx + 1), s.baseProject}
+		seps := strings.Split(s.baseProject, "/")
+		body := []string{strconv.Itoa(idx + 1), seps[len(seps)-1]}
 		for _, h := range result.Headers {
 			var isHit bool = false
 			for _, u := range s.useProjects {
-				if h == u {
+				if h.URL == u {
 					isHit = true
 				}
 			}
@@ -82,7 +93,12 @@ func main() {
 		result.Bodies = append(result.Bodies, body)
 	}
 
-	result.Headers = append([]string{"No", "Projects"}, result.Headers...)
+	result.Headers = append(
+		[]Header{
+			Header{Display: "No"},
+			Header{Display: "Projects"},
+		},
+		result.Headers...)
 
 	tmpl := template.Must(template.ParseFiles("tmpl.md"))
 	buf := &bytes.Buffer{}
